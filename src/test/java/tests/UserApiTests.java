@@ -11,7 +11,7 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.*;
 
 public class UserApiTests extends BaseAPIConfiguration {
 
@@ -47,21 +47,17 @@ public class UserApiTests extends BaseAPIConfiguration {
         String fromDate = "2021-07-01";
         String toDate = "2021-08-06";
         String eventName = "test123";
+        String[] idsToMatch = {"9123387", "9130791"};
 
-        Event[] events = commonSpec()
+        commonSpec()
                 .pathParams("from", fromDate, "to", toDate, "status[0]", "Active", "name", eventName)
                 .when()
                 .get("/organization/events/schedule?from={from}&{to}/{status[0]}/{name}")
                 .then()
                 .statusCode(200)
-                .log()
-                .body()
-                .extract()
-                .as(Event[].class);
-
-        assertThat(events).as("Events %d number doesnt equal to the expected one %d").hasSize(10);
-
-
+                .assertThat()
+                .body("eventSessions.findAll{it.id}.id.flatten().", hasItems(idsToMatch));
+        
     }
 
     @Test
