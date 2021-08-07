@@ -1,6 +1,8 @@
 package tests;
 
 import io.restassured.response.Response;
+import models.Event;
+import models.StatisticsData;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 
@@ -8,7 +10,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
-import static org.hamcrest.Matchers.containsString;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
 public class UserApiTests extends BaseAPIConfiguration {
@@ -43,39 +45,59 @@ public class UserApiTests extends BaseAPIConfiguration {
     @Test
     void getEventsScheduleInfo() {
         String fromDate = "2021-07-01";
-        String toDate = "2021-08-01";
+        String toDate = "2021-08-06";
         String eventName = "test123";
 
-        commonSpec()
-                .pathParam("fromDate", fromDate)
-                .pathParam("toDate", toDate)
-                .pathParam("status[0]", "Active")
-                .pathParam("name", eventName)
+        Event[] events = commonSpec()
+                .pathParams("from", fromDate, "to", toDate, "status[0]", "Active", "name", eventName)
                 .when()
-                .get("/organization/events/schedule?{fromDate}/{toDate}/{status[0]}/{name}")
+                .get("/organization/events/schedule?from={from}&{to}/{status[0]}/{name}")
                 .then()
                 .statusCode(200)
-                .assertThat()
-                .body("id[0]", equalTo("8915623"))
-                .body("name[0]", equalTo(eventName))
-                .body("type[0]", equalTo("webinar"))
-                .body("createUserId[0]", equalTo("33389089"));
+                .log()
+                .body()
+                .extract()
+                .as(Event[].class);
+
+        assertThat(events).as("Events %d number doesnt equal to the expected one %d").hasSize(10);
+
 
     }
 
     @Test
     void getEventInfoById() {
+
         String eventId = "8915623";
-        commonSpec()
+        String expectedEventName = "test123";
+        Integer expectedCreatorId = 33389089;
+        String expectedType = "webinar";
+
+        Event event = commonSpec()
                 .when()
                 .get("/organization/events/{eventId}", eventId)
                 .then()
                 .statusCode(200)
-                .assertThat()
-                .body("id", equalTo(Integer.parseInt(eventId)))
-                .body("name", equalTo("test123"))
-                .body("type", equalTo("webinar"))
-                .body("createUserId", equalTo(33389089));
+                .log()
+                .body()
+                .extract()
+                .as(Event.class);
+
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(event.getId()).as("Obtained event id (%d) doesn't equal to the expected one (%d)",
+                event.getId(), eventId).isEqualTo(Integer.parseInt(eventId));
+
+        softly.assertThat(event.getName()).as("Obtained event name (%s) doesn't equal to the expected one (%s)",
+                event.getName(), expectedEventName).isEqualTo(expectedEventName);
+
+        softly.assertThat(event.getType()).as("Obtained event type (%s) doesn't equal to the expected one (%s)",
+                event.getType(), expectedType).isEqualTo(expectedType);
+
+        softly.assertThat(event.getCreateUser()).as("Create user is null").isNotNull();
+
+        softly.assertThat(event.getCreateUserId()).as("Obtained creator id (%d) doesn't equal to the expected one (%d)",
+                event.getCreateUserId(), expectedCreatorId).isEqualTo(expectedCreatorId);
+        softly.assertAll();
+
     }
 
     @Test
@@ -97,19 +119,29 @@ public class UserApiTests extends BaseAPIConfiguration {
 
     @Test
     void getEventVisitStatistics() {
-        String fromDate = "2021-07-01";
-        String toDate = "2021-08-01";
+        String fromDate = "2021-08-05";
+        String toDate = "2021-08-06";
+        String eventId = "8927615";
+        String expectedUserId = "33389089";
 
-        commonSpec()
-                .pathParams("from", fromDate, "to", toDate)
+        StatisticsData[] statisticsData = commonSpec()
+                .pathParams("from", fromDate, "to", toDate, "eventId", eventId)
                 .when()
-                .get("/stats/users/visits?{from}/{to}")
+                .get("/stats/users?{from}/{to}/{eventId}")
                 .then()
-                .statusCode(400)
-                .assertThat()
-                .body("error.message", containsString("Email or contact ID is mandatory"));
+                .statusCode(200)
+                .log()
+                .body()
+                .extract()
+                .as(StatisticsData[].class);
+
+        boolean checkUserExists = Arrays.stream(statisticsData).anyMatch(c -> c.getId().equals(expectedUserId));
+
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(statisticsData).as("The actual statistics data size %d doesn't equal to the expected one %d", Arrays.asList(statisticsData).size(), 2).hasSize(2);
+        softly.assertThat(checkUserExists).as("User with id %s not found", expectedUserId).isTrue();
+        softly.assertAll();
 
     }
-
 
 }
